@@ -1,0 +1,112 @@
+import multer from "multer";
+import Categorymodel from "../../../../db/models/category.js";
+import {v4 as uuidv4} from 'uuid';
+import userModel from "../../../../db/models/user.model.js";
+uuidv4();
+
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads');
+    },
+    filename: function (req, file, cb) {
+        cb(null, uuidv4() + '_' + file.originalname);
+    },
+});
+
+
+const upload = multer({ storage: storage });
+export const addimg = upload.single('image');
+
+
+export const addcategory = async (req, res) => {
+    const { categoryName, image } = req.body;
+    const createdBy = await userModel.findById(req.body.createdBy)
+
+    const foundedCategory = await Categorymodel.findOne({
+        categoryName: categoryName,
+    });
+    if (foundedCategory) return res.send({ message: "category already exists" });
+    const newCategory = await Categorymodel.insertMany({
+      categoryName,
+      image:req.file.filename,
+      createdBy,
+    });
+    res.send({ message: "category created", category: newCategory });
+  };
+
+export const getAllCategories = async (req, res) => {
+  try {
+      const categories = await Categorymodel.find();
+      res.json({ categories });
+  } catch (error) {
+      res.status(500).json({ message: error.message, data: null });
+  }
+};
+
+
+export const getCategoryByName = async (req, res) => {
+  try {
+      const categoryName = req.body.categoryName;
+
+      const category = await Categorymodel.findOne({ categoryName });
+
+      if (category) {
+          res.json({ category });
+      } else {
+          res.status(404).json({ message: 'Category not found' });
+      }
+  } catch (error) {
+      res.status(500).json({ message: error.message, data: null });
+  }
+};
+
+export const updateCategory = async (req, res) => {
+  try {
+      const categoryId = req.params.categoryId;
+      const { categoryName, image } = req.body;
+
+      const category = await Categorymodel.findById(categoryId);
+
+
+      console.log('category:', category);
+
+      if (!category) {
+          return res.status(404).json( { message: 'Category not found' });
+      }
+      if (category.createdBy.toString() !== req.userid || req.userRole !=="admin") {
+          return res.status(403).json({   message: 'You do not have permission to update this category' });
+      }
+
+      // Update the category
+      const updateCategory = await Categorymodel.findOneAndUpdate(
+          { _id: categoryId, createdBy: req.userid },
+          { $set: { categoryName, image } }, 
+          { new: true }
+      );
+
+      if (!updateCategory) {
+          return res.status(404).json( { message: 'Category not found' });
+      }
+
+      res.status(200).json({ status: 'SUCCESS', data: { updateCategory } });
+  } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: error.message, data: null });
+  }
+};
+
+export const deleteCategory = async (req, res) => {
+    try {
+        const categoryId = req.params.id;
+
+        const deletedCategory = await Categorymodel.findByIdAndDelete(categoryId);
+
+        if (deletedCategory) {
+            res.json({ message: 'Category deleted successfully', category: deletedCategory });
+        } else {
+            res.status(404).json({ message: 'Category not found' });
+        }
+    } catch (error) {
+        res.status(500).json({ message: error.message, data: null });
+    }
+};
